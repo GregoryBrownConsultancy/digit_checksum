@@ -1,6 +1,7 @@
 require 'spec_helper'
 require 'documents/fake_document'
 require 'documents/my_document'
+require 'documents/alphanumeric_document'
 
 describe DigitChecksum do
   it 'has a version number' do
@@ -292,6 +293,23 @@ describe DigitChecksum do
 
   it 'must generated valid document number for custom check digits positions' do
     expect(MyDocument.valid?(MyDocument.generate)).to be_truthy
+  end
+
+  it 'supports custom char_value_proc for alphanumeric documents' do
+    root = '12ABC34501DE'
+
+    digits = AlphanumericDocument.calculate_verify_digits(root)
+    full_number = root + digits.join
+
+    expect(digits).to eq([0, 7])
+    expect(AlphanumericDocument.valid?(full_number)).to be_truthy
+    expect(AlphanumericDocument.pretty(full_number)).to eq('12.ABC.345/01DE-07')
+  end
+
+  it 'falls back to plain digit parsing when char_value_proc is not set' do
+    expect(FakeDocument.respond_to?(:get_char_value_proc)).to be_truthy
+    expect { FakeDocument.get_char_value_proc }.to raise_error(NameError)
+    expect(FakeDocument.new('123456789').send(:character_value, '7')).to eq(7)
   end
 
   it 'must delegate class methods calls to object instance method call' do

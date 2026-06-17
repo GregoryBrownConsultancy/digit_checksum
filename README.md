@@ -21,7 +21,7 @@ One of the greatest abilitys of this library is allowing to check digit checksum
 Add this line to your application's Gemfile:
 
 ```ruby
-gem 'digit_checksum', '~> 0.2.3'
+gem 'digit_checksum', '~> 0.3.0'
 ```
 
 And then execute:
@@ -198,6 +198,47 @@ doc = MyDocument.generate # => "286.670.374.780"
 
 MyDocument.valid?(doc) # =: true
 ```
+
+---
+
+### Alphanumeric documents (custom character value)
+
+By default, every character of a document number is converted to its numeric value through plain digit parsing (`char.to_i`), which is all you need for purely numeric documents like `CPF`.
+
+Some documents, like the new Brazilian `CNPJ` format, allow letters in the document number (only the verify digits themselves stay numeric). To support that, declare `set_char_value_proc` with a `Proc`/`Lambda` that converts a single character into the numeric value used in the checksum calculation:
+
+```ruby
+class CNPJ < DigitChecksum::BaseDocument
+  set_verify_digits_weights first:  %w(5 4 3 2 9 8 7 6 5 4 3 2),
+                            second: %w(6 5 4 3 2 9 8 7 6 5 4 3 2)
+
+  # MOD 11
+  set_division_modulo 11
+
+  # letters are valued by their ASCII code minus 48 (e.g. 'A' => 17, 'Z' => 42)
+  # digits keep their usual value ('0' => 0 ... '9' => 9)
+  set_char_value_proc ->(char) { char.upcase.ord - 48 }
+
+  # remove any character that isn't a digit or a letter
+  set_clear_number_regexp %r{[^A-Za-z0-9]}
+
+  # match both the legacy numeric format and the new alphanumeric format
+  set_format_regexp %r{([A-Z0-9]{2})[-.]?([A-Z0-9]{3})[-.]?([A-Z0-9]{3})[\/]?([A-Z0-9]{4})[-.]?(\d{2})}i
+
+  set_pretty_format_mask %(%s.%s.%s/%s-%s)
+
+  # numbers sampled to generate new document numbers
+  set_generator_numbers (0..9).to_a + ('A'..'Z').to_a
+end
+
+CNPJ.calculate_verify_digits("12ABC34501DE") # => [0, 7]
+
+CNPJ.valid?("12.ABC.345/01DE-07") # => true
+
+CNPJ.generate # => "9F.K3X.0LD/H7QZ-31"
+```
+
+If `set_char_value_proc` isn't declared, the document keeps the original numeric-only behavior — this option is fully backwards compatible with every existing document class.
 
 ---
 
