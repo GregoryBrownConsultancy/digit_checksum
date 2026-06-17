@@ -11,7 +11,8 @@ module DigitChecksum
       :generator_numbers,
       :division_modulo,
       :document_length,
-      :format_regexp
+      :format_regexp,
+      :char_value_proc
     ]
 
     CLASS_METHODS.each do |const_name|
@@ -98,7 +99,10 @@ module DigitChecksum
       digits = calculate_verify_digits
 
       if (!valid_length? && digits != current_verify_digits)
-        @number = normalize
+        # use the raw characters here (not `normalize`'s computed values),
+        # otherwise a multi-digit character_value (e.g. a letter) would get
+        # inserted instead of the original character
+        @number = stripped(@number).split(//)
 
         verify_digits_positions.each_with_index.flat_map {|position, index|
           # position + index
@@ -153,9 +157,19 @@ module DigitChecksum
     end
 
     def normalized(number, length = nil)
-      number = stripped(number).split(//).map(&:to_i)
+      number = stripped(number).split(//).map { |char| character_value(char) }
 
       length.nil? ? number : number[0, length]
+    end
+
+    # converts a single character into its numeric value used for the
+    # checksum calculation. defaults to plain digit parsing, but documents
+    # that accept letters (e.g. alphanumeric CNPJ) can override this via
+    # `set_char_value_proc`
+    def character_value(char)
+      get_char_value_proc.call(char)
+    rescue NameError
+      char.to_i
     end
 
     def remove_verify_digits(number)
